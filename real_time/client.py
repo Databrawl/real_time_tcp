@@ -1,28 +1,31 @@
-from socket import *
+from tornado import gen
+from tornado.ioloop import IOLoop
+from tornado.tcpclient import TCPClient
 
 
-if __name__ == '__main__':
+class Client(TCPClient):
+    """
+    This is a simple echo TCP Client
+    """
+    msg_separator = b'\r\n'
 
-    host = 'localhost'
-    port = 55567
-    buf = 1024
-
-    address = (host, port)
-
-    client_socket = socket(AF_INET, SOCK_STREAM)
-
-    client_socket.connect(address)
-
-    while True:
-        data = input(">> ")
-        data += '\n'
-        if not data:
-            break
-        else:
-            client_socket.send(bytes(data, encoding='utf8'))
-            data = client_socket.recv(buf)
+    @gen.coroutine
+    def run(self, host, port):
+        stream = yield self.connect(host, port)
+        while True:
+            data = input(">> ").encode('utf8')
+            data += self.msg_separator
             if not data:
                 break
             else:
-                print(data)
-    client_socket.close()
+                yield stream.write(data)
+            data = yield stream.read_until(self.msg_separator)
+            body = data.rstrip(self.msg_separator)
+            print(body)
+
+
+if __name__ == '__main__':
+    Client().run('localhost', 5567)
+    print('Connecting to server socket...')
+    IOLoop.instance().start()
+    print('Socket has been closed.')
