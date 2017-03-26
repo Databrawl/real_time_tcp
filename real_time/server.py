@@ -18,6 +18,23 @@ class ClientConnection(object):
 
     def __init__(self, stream):
         self._stream = stream
+        self._subscribed = False
+
+    def _handle_request(self, request):
+        if request == 'SUBSCRIBE':
+            if not self._subscribed:
+                self._subscribed = True
+                return 'CONFIRMED'
+            else:
+                return 'ALREADY SUBSCRIBED'
+        elif request == 'UNSUBSCRIBE':
+            if not self._subscribed:
+                return 'ALREADY UNSUBSCRIBED'
+            else:
+                self._subscribed = False
+                return 'CONFIRMED'
+        else:
+            return 'UNKNOWN COMMAND'
 
     @gen.coroutine
     def run(self):
@@ -31,12 +48,14 @@ class ClientConnection(object):
                     request = yield self._stream.read_until(
                         self.message_separator)
                     request_body = request.rstrip(self.message_separator)
+                    request_body_str = request_body.decode('utf-8')
                 except StreamClosedError:
                     self._stream.close(exc_info=True)
                     return
                 else:
-                    response_body = request_body
-                    response = response_body + self.message_separator
+                    response_body = self._handle_request(request_body_str)
+                    response_body_bytes = response_body.encode('utf-8')
+                    response = response_body_bytes + self.message_separator
                     try:
                         yield self._stream.write(response)
                     except StreamClosedError:
@@ -55,6 +74,8 @@ class ClientConnection(object):
 
         :param message: variable that represents the update message
         """
+        if not self._subscribed:
+            return
         response = message + self.message_separator
         try:
             yield self._stream.write(response)
