@@ -104,11 +104,11 @@ class Server(TCPServer):
 
         :param channel_name: string representing Redis PUB/SUB channel name
         """
-        self._redis = yield aioredis.create_redis(('localhost', 6379))
-        channels = yield self._redis.subscribe(channel_name)
+        self._redis = yield from aioredis.create_redis(('localhost', 6379))
+        channels = yield from self._redis.subscribe(channel_name)
         print('Subscribed to "{}" Redis channel.'.format(channel_name))
         self._channel = channels[0]
-        yield self.listen_redis()
+        yield from to_asyncio_future(self.listen_redis())
 
     @gen.coroutine
     def listen_redis(self):
@@ -117,9 +117,9 @@ class Server(TCPServer):
         publish handler.
         """
         while True:
-            yield self._channel.wait_message()
+            yield from self._channel.wait_message()
             try:
-                msg = yield self._channel.get(encoding='utf-8')
+                msg = yield from self._channel.get(encoding='utf-8')
             except aioredis.errors.ChannelClosedError:
                 print("Redis channel was closed. Stopped listening.")
                 return
@@ -155,8 +155,7 @@ if __name__ == '__main__':
     AsyncIOMainLoop().install()
     server = Server()
     server.listen(5567)
-    IOLoop.current().spawn_callback(server.subscribe, 'updates')
-
+    asyncio.ensure_future(server.subscribe('updates'))
     print('Starting the server...')
     asyncio.get_event_loop().run_forever()
     print('Server has shut down.')
